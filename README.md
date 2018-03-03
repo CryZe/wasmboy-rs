@@ -6,9 +6,9 @@ compiled to Rust. All of the actual emulator code was written by them.
 
 ## Demonstration
 
-Here's a little GIFV showing it running:
+Click to see wasmboy-rs in action:
 
-![https://i.imgur.com/IZiqXG1.gifv](https://i.imgur.com/LosVUIG.png)
+[![wasmboy-rs Demonstration](https://i.imgur.com/LosVUIG.png)](https://i.imgur.com/IZiqXG1.gifv)
 
 ## Licenses
 
