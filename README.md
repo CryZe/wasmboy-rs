@@ -4,6 +4,12 @@ This is based on torch2424's [wasmBoy](https://github.com/torch2424/wasmBoy)
 emulator written in AssemblyScript (a subset of TypeScript) that is then
 compiled to Rust. All of the actual emulator code was written by them.
 
+## Demonstration
+
+Here's a little GIFV showing it running:
+
+![https://i.imgur.com/IZiqXG1.gifv](https://i.imgur.com/LosVUIG.png)
+
 ## Licenses
 
 ### wasmBoy
