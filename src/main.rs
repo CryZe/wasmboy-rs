@@ -1,15 +1,33 @@
+#![windows_subsystem = "windows"]
+
+extern crate byteorder;
 extern crate cpal;
 extern crate minifb;
+#[macro_use]
+extern crate structopt;
 
 use minifb::{Key, Scale, Window, WindowOptions};
 use std::{thread, time};
-use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
+use std::io::{BufReader, Read, Write};
+use std::fs::File;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use structopt::StructOpt;
 
 mod wasm;
 use wasm::{Imports, Memory, Wasm, PAGE_SIZE};
 
 mod memory;
+
+#[derive(StructOpt)]
+struct Opt {
+    #[structopt(short = "s", long = "save-path", parse(from_os_str))]
+    save_path: Option<PathBuf>,
+
+    #[structopt(parse(from_os_str))]
+    rom_path: PathBuf,
+}
 
 impl Imports for () {
     fn log(
@@ -30,21 +48,53 @@ const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
 const FRAME: usize = WIDTH * HEIGHT;
 
-// Feel free to try different ROMs here :D
-const ROM: &[u8] = include_bytes!("../cpu_instrs.gb");
+// Based on memory.ts:50
 const ROM_BASE: usize = 0x043400;
 const FRAME_BASE: usize = 0x008000;
-const MEMORY_BASE: usize = 0x033400;
+const AUDIO_BASE: usize = 0x033400;
+const CARTRIDGE_RAM_BASE: usize = 0x843400;
+
 const SAMPLE_RATE: u32 = 48000;
 const AUDIO_BUF_TARGET_SIZE: usize = 4096;
 const AUDIO_BUF_MAX_CAP: usize = 2 * AUDIO_BUF_TARGET_SIZE;
 
 fn main() {
-    let mut buffer = [0; FRAME];
+    let opt = Opt::from_args();
+
+    // Read the ROM file
+    let rom_path = opt.rom_path;
+    let save_path = opt.save_path.unwrap_or_else(|| rom_path.with_extension("sav"));
+    let mut reader = BufReader::new(File::open(rom_path).expect("Couldn't open ROM file"));
+    let mut rom = Vec::new();
+    reader
+        .read_to_end(&mut rom)
+        .expect("Couldn't read ROM file");
+    drop(reader);
+
+    // Parse the game name
+    let mut window_title = String::from("Game Boy - ");
+    for &c in &rom[0x134..][..15] {
+        if c == 0 {
+            break;
+        }
+        window_title.push(c.into());
+    }
+
+    // Parse the RAM size
+    let ram_size = match rom[0x149] {
+        0 => 0,
+        1 => 2 << 10,
+        2 => 8 << 10,
+        3 => 32 << 10,
+        4 => 128 << 10,
+        5 => 64 << 10,
+        _ => panic!("Invalid RAM size"),
+    };
 
     // Set up the window
+    let mut buffer = [0; FRAME];
     let mut window = Window::new(
-        "Game Boy",
+        &window_title,
         WIDTH,
         HEIGHT,
         WindowOptions {
@@ -89,11 +139,17 @@ fn main() {
         });
     });
 
-    // Create the WebAssembly Instance
+    // Create the WebAssembly instance
     let mut wasmboy = Wasm::new((), Vec::new());
 
     // Load the ROM
-    wasmboy.mem[ROM_BASE..][..ROM.len()].copy_from_slice(ROM);
+    wasmboy.mem[ROM_BASE..][..rom.len()].copy_from_slice(&rom);
+    drop(rom);
+
+    // Try to load the Cartridge RAM
+    File::open(&save_path)
+        .and_then(|mut f| f.read_exact(&mut wasmboy.mem[CARTRIDGE_RAM_BASE..][..ram_size]))
+        .ok();
 
     // Initialize the emulator
     wasmboy.initialize(0);
@@ -122,7 +178,7 @@ fn main() {
 
         // Simulate a frame
         let response = wasmboy.update();
-        assert!(response > 0, "Wasmboy Crashed!");
+        assert!(response > 0, "Wasmboy crashed!");
 
         // Update the audio buffer
         let audio_queue_index = wasmboy.getAudioQueueIndex();
@@ -130,7 +186,7 @@ fn main() {
         let buf_len = 2 * audio_queue_index as usize;
         {
             let mut audio_buf = audio_buf.lock().unwrap();
-            audio_buf.extend(&wasmboy.mem[MEMORY_BASE..][..buf_len]);
+            audio_buf.extend(&wasmboy.mem[AUDIO_BASE..][..buf_len]);
             let len = audio_buf.len();
             if len > AUDIO_BUF_MAX_CAP {
                 audio_buf.drain(..len - AUDIO_BUF_MAX_CAP);
@@ -159,4 +215,9 @@ fn main() {
             thread::sleep(sleep_time);
         }
     }
+
+    // Save the Cartridge RAM
+    let mut file = File::create(save_path).expect("Couldn't create Cartridge RAM file");
+    file.write(&wasmboy.mem[CARTRIDGE_RAM_BASE..][..ram_size])
+        .expect("Couldn't save Cartridge RAM file");
 }

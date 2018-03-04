@@ -1,33 +1,31 @@
 use {Memory, PAGE_SIZE};
+use byteorder::{ByteOrder, LE};
 
 impl Memory for Vec<u8> {
     fn load8(&mut self, addr: usize) -> u8 {
         self[addr]
     }
     fn load16(&mut self, addr: usize) -> u16 {
-        (self.load8(addr) as u16) | ((self.load8(addr + 1) as u16) << 8)
+        LE::read_u16(&self[addr..])
     }
     fn load32(&mut self, addr: usize) -> u32 {
-        (self.load16(addr) as u32) | ((self.load16(addr + 2) as u32) << 16)
+        LE::read_u32(&self[addr..])
     }
     fn load64(&mut self, addr: usize) -> u64 {
-        (self.load32(addr) as u64) | ((self.load32(addr + 4) as u64) << 32)
+        LE::read_u64(&self[addr..])
     }
 
     fn store8(&mut self, addr: usize, val: u8) {
         self[addr] = val;
     }
     fn store16(&mut self, addr: usize, val: u16) {
-        self.store8(addr, (val & 0xFF) as _);
-        self.store8(addr + 1, (val >> 8) as _);
+        LE::write_u16(&mut self[addr..], val);
     }
     fn store32(&mut self, addr: usize, val: u32) {
-        self.store16(addr, (val & 0xFFFF) as _);
-        self.store16(addr + 2, (val >> 16) as _);
+        LE::write_u32(&mut self[addr..], val);
     }
     fn store64(&mut self, addr: usize, val: u64) {
-        self.store32(addr, (val & 0xFFFFFFFF) as _);
-        self.store32(addr + 4, (val >> 32) as _);
+        LE::write_u64(&mut self[addr..], val);
     }
 
     fn store_slice(&mut self, addr: usize, val: &[u8]) {
