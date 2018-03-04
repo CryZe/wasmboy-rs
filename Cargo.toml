@@ -5,3 +5,4 @@ authors = ["Christopher Serr <christopher.serr@gmail.com>"]
 
 [dependencies]
 minifb = "0.10.4"
+cpal = "0.8.0"

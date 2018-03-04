@@ -1,6 +1,10 @@
+extern crate cpal;
 extern crate minifb;
 
 use minifb::{Key, Scale, Window, WindowOptions};
+use std::{thread, time};
+use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 
 mod wasm;
 use wasm::{Imports, Memory, Wasm, PAGE_SIZE};
@@ -30,9 +34,13 @@ const FRAME: usize = WIDTH * HEIGHT;
 const ROM: &[u8] = include_bytes!("../cpu_instrs.gb");
 const ROM_BASE: usize = 0x043400;
 const FRAME_BASE: usize = 0x008000;
+const MEMORY_BASE: usize = 0x033400;
+const SAMPLE_RATE: u32 = 48000;
+const AUDIO_BUF_TARGET_SIZE: usize = 4096;
+const AUDIO_BUF_MAX_CAP: usize = 2 * AUDIO_BUF_TARGET_SIZE;
 
 fn main() {
-    let mut buffer = vec![0; FRAME];
+    let mut buffer = [0; FRAME];
 
     // Set up the window
     let mut window = Window::new(
@@ -44,6 +52,42 @@ fn main() {
             ..Default::default()
         },
     ).unwrap();
+
+    // Set up the audio
+    let event_loop = cpal::EventLoop::new();
+    let device = cpal::default_output_device().expect("No audio device available");
+    let audio_stream = event_loop
+        .build_output_stream(
+            &device,
+            &cpal::Format {
+                channels: 2,
+                sample_rate: cpal::SampleRate(SAMPLE_RATE),
+                data_type: cpal::SampleFormat::F32,
+            },
+        )
+        .unwrap();
+    event_loop.play_stream(audio_stream);
+    let audio_buf = Arc::new(Mutex::new(VecDeque::<u8>::with_capacity(AUDIO_BUF_MAX_CAP)));
+    let audio_buf_clone = audio_buf.clone();
+
+    thread::spawn(move || {
+        event_loop.run(|_, mut stream_data| {
+            if let cpal::StreamData::Output {
+                buffer: cpal::UnknownTypeOutputBuffer::F32(ref mut dst),
+            } = stream_data
+            {
+                let mut src = audio_buf_clone.lock().unwrap();
+                let mut len = src.len();
+                let dst: &mut [f32] = &mut *dst;
+                if dst.len() < len {
+                    len = dst.len();
+                }
+                for (dst, src) in dst.iter_mut().zip(src.drain(..len)) {
+                    *dst = (src as f32 - 1.0) / 127.0 - 1.0;
+                }
+            }
+        });
+    });
 
     // Create the WebAssembly Instance
     let mut wasmboy = Wasm::new((), Vec::new());
@@ -80,6 +124,21 @@ fn main() {
         let response = wasmboy.update();
         assert!(response > 0, "Wasmboy Crashed!");
 
+        // Update the audio buffer
+        let audio_queue_index = wasmboy.getAudioQueueIndex();
+        let audio_buf_fill;
+        let buf_len = 2 * audio_queue_index as usize;
+        {
+            let mut audio_buf = audio_buf.lock().unwrap();
+            audio_buf.extend(&wasmboy.mem[MEMORY_BASE..][..buf_len]);
+            let len = audio_buf.len();
+            if len > AUDIO_BUF_MAX_CAP {
+                audio_buf.drain(..len - AUDIO_BUF_MAX_CAP);
+            }
+            audio_buf_fill = audio_buf.len() as f32 / AUDIO_BUF_TARGET_SIZE as f32;
+        }
+        wasmboy.resetAudioQueue();
+
         // Copy the frame
         for (dst, &src) in buffer.iter_mut().zip(&wasmboy.mem[FRAME_BASE..]) {
             *dst = match src {
@@ -93,7 +152,11 @@ fn main() {
         // Show the frame
         window.update_with_buffer(&buffer).unwrap();
 
-        // Sleep a bit
-        std::thread::sleep(std::time::Duration::from_millis(1000 / 60));
+        if !window.is_key_down(Key::D) {
+            // Sleep a bit based on the fill of the audio buffer
+            let sleep_time =
+                time::Duration::new(0, ((1_000_000_000.0 / 60.0) * audio_buf_fill) as u32);
+            thread::sleep(sleep_time);
+        }
     }
 }
