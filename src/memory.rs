@@ -38,7 +38,7 @@ impl Memory for Vec<u8> {
         self.resize(len, 0);
         previous_size as i32
     }
-    fn current(&self) -> i32 {
+    fn size(&mut self) -> i32 {
         (self.len() / PAGE_SIZE) as i32
     }
 }

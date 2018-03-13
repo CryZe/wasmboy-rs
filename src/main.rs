@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 extern crate byteorder;
 extern crate cpal;
@@ -7,7 +7,7 @@ extern crate minifb;
 extern crate structopt;
 
 use minifb::{Key, Scale, Window, WindowOptions};
-use std::{thread, time};
+use std::{char, thread, time};
 use std::collections::VecDeque;
 use std::io::{BufReader, Read, Write};
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 
 mod wasm;
-use wasm::{Imports, Memory, Wasm, PAGE_SIZE};
+use wasm::{Context, Imports, Instance, Memory, PAGE_SIZE};
 
 mod memory;
 
@@ -24,23 +24,49 @@ mod memory;
 struct Opt {
     #[structopt(short = "s", long = "save-path", parse(from_os_str))]
     save_path: Option<PathBuf>,
-
     #[structopt(parse(from_os_str))]
     rom_path: PathBuf,
 }
 
 impl Imports for () {
+    type Memory = Vec<u8>;
     fn log(
         &mut self,
+        context: &mut Context<Self::Memory>,
+        message: i32,
         _num_args: i32,
-        _arg1: i32,
-        _arg2: i32,
-        _arg3: i32,
-        _arg4: i32,
-        _arg5: i32,
-        _arg6: i32,
-        _arg7: i32,
+        arg0: i32,
+        arg1: i32,
+        arg2: i32,
+        arg3: i32,
+        arg4: i32,
+        arg5: i32,
     ) {
+        let message = message as usize;
+        let len = context.memory.load32(message) as usize;
+        let message = message + 4;
+        let mut chars =
+            char::decode_utf16((0..len).map(|o| context.memory.load16(message + 2 * o))).peekable();
+        while let Some(Ok(c)) = chars.next() {
+            if c == '$' {
+                let val = match chars.peek() {
+                    Some(&Ok('0')) => Some(arg0),
+                    Some(&Ok('1')) => Some(arg1),
+                    Some(&Ok('2')) => Some(arg2),
+                    Some(&Ok('3')) => Some(arg3),
+                    Some(&Ok('4')) => Some(arg4),
+                    Some(&Ok('5')) => Some(arg5),
+                    _ => None,
+                };
+                if let Some(v) = val {
+                    print!("{}", v);
+                    chars.next();
+                    continue;
+                }
+            }
+            print!("{}", c);
+        }
+        println!();
     }
 }
 
@@ -49,10 +75,10 @@ const HEIGHT: usize = 144;
 const FRAME: usize = WIDTH * HEIGHT;
 
 // Based on memory.ts:50
-const ROM_BASE: usize = 0x043400;
-const FRAME_BASE: usize = 0x008000;
-const AUDIO_BASE: usize = 0x033400;
-const CARTRIDGE_RAM_BASE: usize = 0x843400;
+const ROM_BASE: usize = 0x073800;
+const FRAME_BASE: usize = 0x028400;
+const AUDIO_BASE: usize = 0x053800;
+const CARTRIDGE_RAM_BASE: usize = 0x008400;
 
 const SAMPLE_RATE: u32 = 48000;
 const AUDIO_BUF_TARGET_SIZE: usize = 4096;
@@ -63,7 +89,8 @@ fn main() {
 
     // Read the ROM file
     let rom_path = opt.rom_path;
-    let save_path = opt.save_path.unwrap_or_else(|| rom_path.with_extension("sav"));
+    let save_path = opt.save_path
+        .unwrap_or_else(|| rom_path.with_extension("sav"));
     let mut reader = BufReader::new(File::open(rom_path).expect("Couldn't open ROM file"));
     let mut rom = Vec::new();
     reader
@@ -140,15 +167,17 @@ fn main() {
     });
 
     // Create the WebAssembly instance
-    let mut wasmboy = Wasm::new((), Vec::new());
+    let mut wasmboy = Instance::new((), Vec::new());
 
     // Load the ROM
-    wasmboy.mem[ROM_BASE..][..rom.len()].copy_from_slice(&rom);
+    wasmboy.context.memory[ROM_BASE..][..rom.len()].copy_from_slice(&rom);
     drop(rom);
 
     // Try to load the Cartridge RAM
     File::open(&save_path)
-        .and_then(|mut f| f.read_exact(&mut wasmboy.mem[CARTRIDGE_RAM_BASE..][..ram_size]))
+        .and_then(|mut f| {
+            f.read_exact(&mut wasmboy.context.memory[CARTRIDGE_RAM_BASE..][..ram_size])
+        })
         .ok();
 
     // Initialize the emulator
@@ -186,7 +215,7 @@ fn main() {
         let buf_len = 2 * audio_queue_index as usize;
         {
             let mut audio_buf = audio_buf.lock().unwrap();
-            audio_buf.extend(&wasmboy.mem[AUDIO_BASE..][..buf_len]);
+            audio_buf.extend(&wasmboy.context.memory[AUDIO_BASE..][..buf_len]);
             let len = audio_buf.len();
             if len > AUDIO_BUF_MAX_CAP {
                 audio_buf.drain(..len - AUDIO_BUF_MAX_CAP);
@@ -196,7 +225,7 @@ fn main() {
         wasmboy.resetAudioQueue();
 
         // Copy the frame
-        for (dst, &src) in buffer.iter_mut().zip(&wasmboy.mem[FRAME_BASE..]) {
+        for (dst, &src) in buffer.iter_mut().zip(&wasmboy.context.memory[FRAME_BASE..]) {
             *dst = match src {
                 1 => 0xFF_FF_FF_FF,
                 2 => 0xFF_D3_D3_D3,
@@ -218,6 +247,6 @@ fn main() {
 
     // Save the Cartridge RAM
     let mut file = File::create(save_path).expect("Couldn't create Cartridge RAM file");
-    file.write(&wasmboy.mem[CARTRIDGE_RAM_BASE..][..ram_size])
+    file.write(&wasmboy.context.memory[CARTRIDGE_RAM_BASE..][..ram_size])
         .expect("Couldn't save Cartridge RAM file");
 }
