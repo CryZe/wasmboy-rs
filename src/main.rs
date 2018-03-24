@@ -1,24 +1,23 @@
 // #![windows_subsystem = "windows"]
 
-extern crate byteorder;
 extern crate cpal;
+extern crate gilrs;
 extern crate minifb;
 #[macro_use]
 extern crate structopt;
+extern crate wasmboy;
 
 use minifb::{Key, Scale, Window, WindowOptions};
-use std::{char, thread, time};
+use std::{thread, time};
 use std::collections::VecDeque;
 use std::io::{BufReader, Read, Write};
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
-
-mod wasm;
-use wasm::{Context, Imports, Instance, Memory, PAGE_SIZE};
-
-mod memory;
+use wasmboy::Instance;
+use wasmboy::consts::*;
+use gilrs::{Axis, Button, Gilrs};
 
 #[derive(StructOpt)]
 struct Opt {
@@ -28,59 +27,6 @@ struct Opt {
     rom_path: PathBuf,
 }
 
-impl Imports for () {
-    type Memory = Vec<u8>;
-    fn log(
-        &mut self,
-        context: &mut Context<Self::Memory>,
-        message: i32,
-        _num_args: i32,
-        arg0: i32,
-        arg1: i32,
-        arg2: i32,
-        arg3: i32,
-        arg4: i32,
-        arg5: i32,
-    ) {
-        let message = message as usize;
-        let len = context.memory.load32(message) as usize;
-        let message = message + 4;
-        let mut chars =
-            char::decode_utf16((0..len).map(|o| context.memory.load16(message + 2 * o))).peekable();
-        while let Some(Ok(c)) = chars.next() {
-            if c == '$' {
-                let val = match chars.peek() {
-                    Some(&Ok('0')) => Some(arg0),
-                    Some(&Ok('1')) => Some(arg1),
-                    Some(&Ok('2')) => Some(arg2),
-                    Some(&Ok('3')) => Some(arg3),
-                    Some(&Ok('4')) => Some(arg4),
-                    Some(&Ok('5')) => Some(arg5),
-                    _ => None,
-                };
-                if let Some(v) = val {
-                    print!("{}", v);
-                    chars.next();
-                    continue;
-                }
-            }
-            print!("{}", c);
-        }
-        println!();
-    }
-}
-
-const WIDTH: usize = 160;
-const HEIGHT: usize = 144;
-const FRAME: usize = WIDTH * HEIGHT;
-
-// Based on memory.ts:50
-const ROM_BASE: usize = 0x073800;
-const FRAME_BASE: usize = 0x028400;
-const AUDIO_BASE: usize = 0x053800;
-const CARTRIDGE_RAM_BASE: usize = 0x008400;
-
-const SAMPLE_RATE: u32 = 48000;
 const AUDIO_BUF_TARGET_SIZE: usize = 4096;
 const AUDIO_BUF_MAX_CAP: usize = 2 * AUDIO_BUF_TARGET_SIZE;
 
@@ -130,6 +76,9 @@ fn main() {
         },
     ).unwrap();
 
+    // Set up gamepads
+    let mut gilrs = Gilrs::new().unwrap();
+
     // Set up the audio
     let event_loop = cpal::EventLoop::new();
     let device = cpal::default_output_device().expect("No audio device available");
@@ -160,7 +109,13 @@ fn main() {
                     len = dst.len();
                 }
                 for (dst, src) in dst.iter_mut().zip(src.drain(..len)) {
-                    *dst = (src as f32 - 1.0) / 127.0 - 1.0;
+                    let mut val = (src as f32 - 1.0) / 127.0 - 1.0;
+                    if val.abs() < 0.008 {
+                        // Should probably be 0
+                        val = 0.0;
+                    }
+                    // Volume, it's way too loud
+                    *dst = val / 2.5;
                 }
             }
         });
@@ -169,9 +124,22 @@ fn main() {
     // Create the WebAssembly instance
     let mut wasmboy = Instance::new((), Vec::new());
 
+    // Configure the instance
+    let audio_batch_processing = 1;
+    let graphics_batch_processing = 1;
+    let timers_batch_processing = 1;
+    wasmboy.config(
+        audio_batch_processing,
+        graphics_batch_processing,
+        timers_batch_processing,
+    );
+
     // Load the ROM
     wasmboy.context.memory[ROM_BASE..][..rom.len()].copy_from_slice(&rom);
     drop(rom);
+
+    // Initialize the emulator
+    wasmboy.initialize(0);
 
     // Try to load the Cartridge RAM
     File::open(&save_path)
@@ -180,19 +148,42 @@ fn main() {
         })
         .ok();
 
-    // Initialize the emulator
-    wasmboy.initialize(0);
-
     while window.is_open() && !window.is_key_down(Key::Escape) {
         // Update Joypad States
-        let button_up = window.is_key_down(Key::Up) as i32;
-        let button_right = window.is_key_down(Key::Right) as i32;
-        let button_down = window.is_key_down(Key::Down) as i32;
-        let button_left = window.is_key_down(Key::Left) as i32;
-        let button_a = window.is_key_down(Key::S) as i32;
-        let button_b = window.is_key_down(Key::A) as i32;
-        let button_select = window.is_key_down(Key::Q) as i32;
-        let button_start = window.is_key_down(Key::W) as i32;
+        while let Some(_) = gilrs.next_event() {}
+
+        let button_up = (window.is_key_down(Key::Up) || gilrs.gamepads().any(|(_, g)| {
+            g.is_pressed(Button::DPadUp)
+                || g.axis_data(Axis::LeftStickY)
+                    .map_or(false, |c| c.value() > 0.5)
+        })) as i32;
+        let button_right = (window.is_key_down(Key::Right) || gilrs.gamepads().any(|(_, g)| {
+            g.is_pressed(Button::DPadRight)
+                || g.axis_data(Axis::LeftStickX)
+                    .map_or(false, |c| c.value() > 0.5)
+        })) as i32;
+        let button_down = (window.is_key_down(Key::Down) || gilrs.gamepads().any(|(_, g)| {
+            g.is_pressed(Button::DPadDown)
+                || g.axis_data(Axis::LeftStickY)
+                    .map_or(false, |c| c.value() < -0.5)
+        })) as i32;
+        let button_left = (window.is_key_down(Key::Left) || gilrs.gamepads().any(|(_, g)| {
+            g.is_pressed(Button::DPadLeft)
+                || g.axis_data(Axis::LeftStickX)
+                    .map_or(false, |c| c.value() < -0.5)
+        })) as i32;
+        let button_a = (window.is_key_down(Key::S)
+            || gilrs.gamepads().any(|(_, g)| g.is_pressed(Button::East)))
+            as i32;
+        let button_b = (window.is_key_down(Key::A)
+            || gilrs.gamepads().any(|(_, g)| g.is_pressed(Button::South)))
+            as i32;
+        let button_select = (window.is_key_down(Key::Q)
+            || gilrs.gamepads().any(|(_, g)| g.is_pressed(Button::Select)))
+            as i32;
+        let button_start = (window.is_key_down(Key::W)
+            || gilrs.gamepads().any(|(_, g)| g.is_pressed(Button::Start)))
+            as i32;
 
         wasmboy.setJoypadState(
             button_up,
@@ -228,8 +219,8 @@ fn main() {
         for (dst, &src) in buffer.iter_mut().zip(&wasmboy.context.memory[FRAME_BASE..]) {
             *dst = match src {
                 1 => 0xFF_FF_FF_FF,
-                2 => 0xFF_D3_D3_D3,
-                3 => 0xFF_A9_A9_A9,
+                2 => 0xFF_A0_A0_A0,
+                3 => 0xFF_58_58_58,
                 _ => 0xFF_00_00_00,
             };
         }
@@ -237,7 +228,11 @@ fn main() {
         // Show the frame
         window.update_with_buffer(&buffer).unwrap();
 
-        if !window.is_key_down(Key::D) {
+        if !window.is_key_down(Key::D)
+            && gilrs
+                .gamepads()
+                .all(|(_, g)| !g.is_pressed(Button::RightTrigger))
+        {
             // Sleep a bit based on the fill of the audio buffer
             let sleep_time =
                 time::Duration::new(0, ((1_000_000_000.0 / 60.0) * audio_buf_fill) as u32);

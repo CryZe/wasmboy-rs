@@ -7,8 +7,13 @@ authors = ["Christopher Serr <christopher.serr@gmail.com>"]
 lto = true
 panic = 'abort'
 
+[profile.bench]
+lto = true
+panic = 'abort'
+
 [dependencies]
 byteorder = "1.2.1"
 cpal = "0.8.0"
 minifb = "0.10.4"
 structopt = "0.2.4"
+gilrs = "0.6.0"
