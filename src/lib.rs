@@ -7,15 +7,17 @@ use wasm::{Context, Imports, Memory, PAGE_SIZE};
 pub use wasm::Instance;
 
 pub mod consts {
+    use wasm::consts;
+
     pub const WIDTH: usize = 160;
     pub const HEIGHT: usize = 144;
     pub const FRAME: usize = WIDTH * HEIGHT;
 
-    // Based on memory.ts:50
-    pub const ROM_BASE: usize = 0x073800;
-    pub const FRAME_BASE: usize = 0x028400;
-    pub const AUDIO_BASE: usize = 0x053800;
-    pub const CARTRIDGE_RAM_BASE: usize = 0x008400;
+    pub const RAM_BASE: usize = consts::gameBoyInternalMemoryLocation as usize;
+    pub const FRAME_BASE: usize = consts::videoOutputLocation as usize;
+    pub const AUDIO_BASE: usize = consts::soundOutputLocation as usize;
+    pub const ROM_BASE: usize = consts::gameBytesLocation as usize;
+    pub const CARTRIDGE_RAM_BASE: usize = consts::gameRamBanksLocation as usize;
 
     pub const SAMPLE_RATE: u32 = 48000;
 }

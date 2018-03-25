@@ -129,10 +129,14 @@ fn main() {
     let audio_batch_processing = 1;
     let graphics_batch_processing = 1;
     let timers_batch_processing = 1;
+    let graphics_disable_scanline_rendering = 1;
+    let audio_accumulate_samples = 1;
     wasmboy.config(
         audio_batch_processing,
         graphics_batch_processing,
         timers_batch_processing,
+        graphics_disable_scanline_rendering,
+        audio_accumulate_samples,
     );
 
     // Load the ROM
@@ -140,7 +144,7 @@ fn main() {
     drop(rom);
 
     // Initialize the emulator
-    wasmboy.initialize(0);
+    wasmboy.initialize(1, 0);
 
     // Try to load the Cartridge RAM
     File::open(&save_path)
@@ -217,13 +221,12 @@ fn main() {
         wasmboy.resetAudioQueue();
 
         // Copy the frame
-        for (dst, &src) in buffer.iter_mut().zip(&wasmboy.context.memory[FRAME_BASE..]) {
-            *dst = match src {
-                1 => 0xFF_FF_FF_FF,
-                2 => 0xFF_A0_A0_A0,
-                3 => 0xFF_58_58_58,
-                _ => 0xFF_00_00_00,
-            };
+        for (dst, src) in buffer
+            .iter_mut()
+            .zip(wasmboy.context.memory[FRAME_BASE..].chunks(3))
+        {
+            let (r, g, b) = (src[0] as u32, src[1] as u32, src[2] as u32);
+            *dst = (0xFF << 24) | (r << 16) | (g << 8) | b;
         }
 
         // Calculate hqx
