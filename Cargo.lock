@@ -251,6 +251,13 @@ version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "hqx"
+version = "0.1.0"
+dependencies = [
+ "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "iovec"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -686,6 +693,7 @@ dependencies = [
  "byteorder 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cpal 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gilrs 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hqx 0.1.0",
  "minifb 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

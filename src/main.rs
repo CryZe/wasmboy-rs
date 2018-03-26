@@ -2,12 +2,13 @@
 
 extern crate cpal;
 extern crate gilrs;
+extern crate hqx;
 extern crate minifb;
 #[macro_use]
 extern crate structopt;
 extern crate wasmboy;
 
-use minifb::{Key, Scale, Window, WindowOptions};
+use minifb::{Key, Window, WindowOptions};
 use std::{thread, time};
 use std::collections::VecDeque;
 use std::io::{BufReader, Read, Write};
@@ -18,6 +19,7 @@ use structopt::StructOpt;
 use wasmboy::Instance;
 use wasmboy::consts::*;
 use gilrs::{Axis, Button, Gilrs};
+use hqx::hq3x;
 
 #[derive(StructOpt)]
 struct Opt {
@@ -27,7 +29,7 @@ struct Opt {
     rom_path: PathBuf,
 }
 
-const AUDIO_BUF_TARGET_SIZE: usize = 4096;
+const AUDIO_BUF_TARGET_SIZE: usize = 2 * 4096;
 const AUDIO_BUF_MAX_CAP: usize = 2 * AUDIO_BUF_TARGET_SIZE;
 
 fn main() {
@@ -65,15 +67,14 @@ fn main() {
     };
 
     // Set up the window
+    const HQX_SCALE: usize = 3;
     let mut buffer = [0; FRAME];
+    let mut hqx_buffer = [0; HQX_SCALE * HQX_SCALE * FRAME];
     let mut window = Window::new(
         &window_title,
-        WIDTH,
-        HEIGHT,
-        WindowOptions {
-            scale: Scale::X2,
-            ..Default::default()
-        },
+        HQX_SCALE * WIDTH,
+        HQX_SCALE * HEIGHT,
+        WindowOptions::default(),
     ).unwrap();
 
     // Set up gamepads
@@ -225,8 +226,11 @@ fn main() {
             };
         }
 
+        // Calculate hqx
+        hq3x(&buffer, &mut hqx_buffer, WIDTH, HEIGHT);
+
         // Show the frame
-        window.update_with_buffer(&buffer).unwrap();
+        window.update_with_buffer(&hqx_buffer).unwrap();
 
         if !window.is_key_down(Key::D)
             && gilrs
