@@ -80,6 +80,8 @@ matrix:
       rust: nightly
 
 before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq libx11-dev
   - set -e
   - rustup self update
 
