@@ -1,6 +1,11 @@
 set -ex
 
 main() {
+    cat > Cross.toml <<EOF
+[target.x86_64-unknown-linux-gnu]
+image = "cryze/x86_64-unknown-linux-gnu-wasmboy"
+EOF
+
     local target=
     if [ $TRAVIS_OS_NAME = linux ]; then
         target=x86_64-unknown-linux-musl
