@@ -8,12 +8,10 @@ passthrough = [
 ]
 [target.i686-unknown-linux-gnu]
 image = "cryze/i686-unknown-linux-gnu-wasmboy"
-[target.i686-unknown-linux-musl]
-image = "cryze/i686-unknown-linux-musl-wasmboy"
 [target.x86_64-unknown-linux-gnu]
 image = "cryze/x86_64-unknown-linux-gnu-wasmboy"
-[target.x86_64-unknown-linux-musl]
-image = "cryze/x86_64-unknown-linux-musl-wasmboy"
+[target.aarch64-unknown-linux-gnu]
+image = "cryze/aarch64-unknown-linux-gnu-wasmboy"
 EOF
 
     local target=
