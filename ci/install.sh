@@ -3,7 +3,7 @@ set -ex
 main() {
     cat > Cross.toml <<EOF
 [target.i686-unknown-linux-gnu]
-image = "cryze/i686-unknown-linux-gnu-wasmboy"
+image = "cryze/i686-unknown-linux-gnu-wasmboy:bv87zsmoyhcbds9liueuywf"
 [target.x86_64-unknown-linux-gnu]
 image = "cryze/x86_64-unknown-linux-gnu-wasmboy"
 [target.aarch64-unknown-linux-gnu]
