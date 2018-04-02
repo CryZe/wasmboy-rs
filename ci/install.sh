@@ -2,10 +2,6 @@ set -ex
 
 main() {
     cat > Cross.toml <<EOF
-[build.env]
-passthrough = [
-    "PKG_CONFIG_ALLOW_CROSS",
-]
 [target.i686-unknown-linux-gnu]
 image = "cryze/i686-unknown-linux-gnu-wasmboy"
 [target.x86_64-unknown-linux-gnu]
