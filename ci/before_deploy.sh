@@ -17,7 +17,7 @@ main() {
 
     test -f Cargo.lock || cargo generate-lockfile
 
-    PKG_CONFIG_ALLOW_CROSS=1 cross build --target $TARGET --release
+    cross build --target $TARGET --release
 
     cp target/$TARGET/release/wasmboy $stage/
 
