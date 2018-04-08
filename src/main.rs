@@ -127,7 +127,7 @@ fn main() {
 
     // Configure the instance
     let audio_batch_processing = 1;
-    let graphics_batch_processing = 1;
+    let graphics_batch_processing = 0;
     let timers_batch_processing = 1;
     let graphics_disable_scanline_rendering = 1;
     let audio_accumulate_samples = 1;
