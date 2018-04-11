@@ -8,18 +8,18 @@ extern crate minifb;
 extern crate structopt;
 extern crate wasmboy;
 
+use gilrs::{Axis, Button, Gilrs};
+use hqx::hq3x;
 use minifb::{Key, Window, WindowOptions};
-use std::{thread, time};
 use std::collections::VecDeque;
-use std::io::{BufReader, Read, Write};
 use std::fs::File;
+use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::{thread, time};
 use structopt::StructOpt;
 use wasmboy::Instance;
 use wasmboy::consts::*;
-use gilrs::{Axis, Button, Gilrs};
-use hqx::hq3x;
 
 #[derive(StructOpt)]
 struct Opt {
@@ -129,7 +129,7 @@ fn main() {
     let audio_batch_processing = 1;
     let graphics_batch_processing = 0;
     let timers_batch_processing = 1;
-    let graphics_disable_scanline_rendering = 1;
+    let graphics_disable_scanline_rendering = 0;
     let audio_accumulate_samples = 1;
     wasmboy.config(
         audio_batch_processing,

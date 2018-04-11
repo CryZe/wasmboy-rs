@@ -3,8 +3,8 @@ extern crate byteorder;
 use std::char;
 
 mod wasm;
-use wasm::{Context, Imports, Memory, PAGE_SIZE};
 pub use wasm::Instance;
+use wasm::{Context, Imports, Memory, PAGE_SIZE};
 
 pub mod consts {
     use wasm::consts;
@@ -14,7 +14,7 @@ pub mod consts {
     pub const FRAME: usize = WIDTH * HEIGHT;
 
     pub const RAM_BASE: usize = consts::gameBoyInternalMemoryLocation as usize;
-    pub const FRAME_BASE: usize = consts::videoOutputLocation as usize;
+    pub const FRAME_BASE: usize = consts::currentFrameVideoOutputLocation as usize;
     pub const AUDIO_BASE: usize = consts::soundOutputLocation as usize;
     pub const ROM_BASE: usize = consts::gameBytesLocation as usize;
     pub const CARTRIDGE_RAM_BASE: usize = consts::gameRamBanksLocation as usize;
