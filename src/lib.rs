@@ -3,8 +3,7 @@ extern crate byteorder;
 use std::char;
 
 mod wasm;
-pub use wasm::Instance;
-use wasm::{Context, Imports, Memory, PAGE_SIZE};
+pub use wasm::{Context, Imports, Instance, Memory, PAGE_SIZE};
 
 pub mod consts {
     use wasm::consts;
