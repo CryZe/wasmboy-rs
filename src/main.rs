@@ -131,12 +131,16 @@ fn main() {
     let timers_batch_processing = 1;
     let graphics_disable_scanline_rendering = 0;
     let audio_accumulate_samples = 1;
+    let tile_rendering = 0;
+    let tile_caching = 1;
     wasmboy.config(
         audio_batch_processing,
         graphics_batch_processing,
         timers_batch_processing,
         graphics_disable_scanline_rendering,
         audio_accumulate_samples,
+        tile_rendering,
+        tile_caching,
     );
 
     // Load the ROM
