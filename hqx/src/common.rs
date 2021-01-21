@@ -109,3 +109,42 @@ pub fn interp10(c1: u32, c2: u32, c3: u32) -> u32 {
     //(c1*14+c2+c3)/16;
     interpolate3(c1, 14, c2, 1, c3, 1, 4)
 }
+
+// A wrapper that allows any indexing panics to point to the same location,
+// significantly reducing size of the generated code.
+#[repr(transparent)]
+pub struct Dst([u32]);
+
+impl Dst {
+    pub fn from_mut(dst: &mut [u32]) -> &mut Self {
+        // This is safe because it's `#[repr(transparent)]`.
+        unsafe { &mut *(dst as *mut [u32] as *mut Self) }
+    }
+}
+
+#[inline(always)]
+fn unwrap_index<T>(option: Option<T>) -> T {
+    match option {
+        Some(value) => value,
+        #[cfg(debug_assertions)]
+        None => unreachable!(),
+        #[cfg(not(debug_assertions))]
+        None => unsafe { std::hint::unreachable_unchecked() },
+    }
+}
+
+impl std::ops::Index<usize> for Dst {
+    type Output = u32;
+
+    #[inline(always)]
+    fn index(&self, index: usize) -> &u32 {
+        unwrap_index(self.0.get(index))
+    }
+}
+
+impl std::ops::IndexMut<usize> for Dst {
+    #[inline(always)]
+    fn index_mut(&mut self, index: usize) -> &mut u32 {
+        unwrap_index(self.0.get_mut(index))
+    }
+}

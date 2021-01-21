@@ -1,4 +1,4 @@
-use common::{diff, rgb_to_yuv, yuv_diff, interp1, interp2, interp3, interp4, interp5};
+use common::{Dst, diff, rgb_to_yuv, yuv_diff, interp1, interp2, interp3, interp4, interp5};
 
 macro_rules! pixel00_1_m {
     ($dst:ident, $dst_index:ident, $dst_row_elements:ident, $w:ident) => {
@@ -247,6 +247,7 @@ pub fn inner(
     width: usize,
     height: usize,
 ) {
+    let dst = Dst::from_mut(dst);
     let mut w = [0; 10];
     let src_row_elements = (src_row_bytes >> 2) as isize;
     let dst_row_elements = (dst_row_bytes >> 2) as isize;
