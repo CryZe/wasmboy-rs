@@ -1,4 +1,4 @@
-use common::{Dst, diff, rgb_to_yuv, yuv_diff, interp1, interp2, interp3, interp5, interp6, interp7, interp8};
+use common::{UncheckedDst, diff, rgb_to_yuv, yuv_diff, interp1, interp2, interp3, interp5, interp6, interp7, interp8};
 
 macro_rules! pixel00_0 {
     ($dst:ident, $dst_index:ident, $dst_row_elements:ident, $w:ident) => {
@@ -714,7 +714,7 @@ pub fn inner(
     width: usize,
     height: usize,
 ) {
-    let dst = Dst::from_mut(dst);
+    let dst = unsafe { UncheckedDst::from_mut(dst) };
     let mut w = [0; 10];
     let src_row_elements = (src_row_bytes >> 2) as isize;
     let dst_row_elements = (dst_row_bytes >> 2) as isize;

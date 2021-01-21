@@ -113,12 +113,11 @@ pub fn interp10(c1: u32, c2: u32, c3: u32) -> u32 {
 // A wrapper that allows any indexing panics to point to the same location,
 // significantly reducing size of the generated code.
 #[repr(transparent)]
-pub struct Dst([u32]);
+pub struct UncheckedDst([u32]);
 
-impl Dst {
-    pub fn from_mut(dst: &mut [u32]) -> &mut Self {
-        // This is safe because it's `#[repr(transparent)]`.
-        unsafe { &mut *(dst as *mut [u32] as *mut Self) }
+impl UncheckedDst {
+    pub unsafe fn from_mut(dst: &mut [u32]) -> &mut Self {
+        &mut *(dst as *mut [u32] as *mut Self)
     }
 }
 
@@ -133,7 +132,7 @@ fn unwrap_index<T>(option: Option<T>) -> T {
     }
 }
 
-impl std::ops::Index<usize> for Dst {
+impl std::ops::Index<usize> for UncheckedDst {
     type Output = u32;
 
     #[inline(always)]
@@ -142,7 +141,7 @@ impl std::ops::Index<usize> for Dst {
     }
 }
 
-impl std::ops::IndexMut<usize> for Dst {
+impl std::ops::IndexMut<usize> for UncheckedDst {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut u32 {
         unwrap_index(self.0.get_mut(index))
